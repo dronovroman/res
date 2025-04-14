@@ -1,64 +1,115 @@
 import logging
 import os
-import torch # Import torch
+import torch
 from transformers import Trainer, TrainingArguments, TrainerCallback, TrainerState, TrainerControl, PreTrainedModel
 from typing import Dict, Optional
 
-# --- Updated Custom Callback ---
+# Assuming your model, tokenizer, datasets are defined somewhere above
+# model = ...
+# tokenizer = ...
+# train_dataset = ...
+# eval_dataset = ... # Optional
+# compute_metrics = ... # Optional function for evaluation
+
+
+# --- Custom Trainer to Calculate Grad Norm ---
+class TrainerWithGradNorm(Trainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Initialize a variable to store the grad norm
+        self.state.last_grad_norm = None # Use TrainerState to store temporary values
+
+    def training_step(self, model: torch.nn.Module, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+        """
+        Perform a training step on a batch of inputs.
+
+        Subclass and override to compute and store grad norm before optimizer.step()
+        and zero_grad().
+        """
+        model.train()
+        inputs = self._prepare_inputs(inputs)
+
+        # --- Standard Forward Pass ---
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs)
+
+        if self.args.n_gpu > 1:
+            loss = loss.mean()  # mean() to average on multi-gpu parallel training
+
+        # --- Backward Pass ---
+        # self.accelerator.backward(loss) handles gradient accumulation and scaling
+        self.accelerator.backward(loss)
+
+        # --- Calculate Grad Norm ---
+        # This happens *after* backward() and *before* optimizer.step() / zero_grad()
+        # Important: Only calculate the norm when an optimizer step is actually going to happen
+        #            (i.e., not in the middle of gradient accumulation)
+        is_optimizer_step = (self.state.global_step + 1) % self.args.gradient_accumulation_steps == 0 \
+                           or (self.state.num_training_steps == self.state.global_step + 1) # Last step
+
+        grad_norm = None # Initialize to None for steps without optimizer update
+        if self.accelerator.sync_gradients and is_optimizer_step:
+            # Need to unscale gradients before clipping/norm calculation if using AMP
+            self.accelerator.unscale_gradients()
+
+            parameters_with_grad = [p for p in model.parameters() if p.grad is not None]
+            if parameters_with_grad: # Ensure there are grads
+                # Calculate the norm *before* clipping if you want unclipped norm
+                # Or calculate *after* clipping if you want the potentially clipped norm
+                # self.accelerator.clip_grad_norm_ handles clipping
+
+                # Calculate norm (using same logic as callback, but at the right time)
+                device = parameters_with_grad[0].grad.device
+                try:
+                    # Use float32 for stability
+                    stacked_norms = torch.stack([
+                        torch.norm(p.grad.detach().to(torch.float32), 2).to(device)
+                        for p in parameters_with_grad
+                    ])
+                    grad_norm = torch.norm(stacked_norms, 2).item()
+                except Exception as e:
+                    logging.warning(f"Could not compute grad norm during training step: {e}")
+                    grad_norm = None # Set to None on error
+
+            # Apply gradient clipping (Trainer/Accelerator usually does this before optimizer step)
+            # Make sure your calculation doesn't interfere with the Trainer's internal clipping
+            if self.args.max_grad_norm is not None and self.args.max_grad_norm > 0:
+                 self.accelerator.clip_grad_norm_(model.parameters(), self.args.max_grad_norm)
+
+        # Store the calculated norm in the state
+        self.state.last_grad_norm = grad_norm
+
+        # --- Optimizer Step & Zero Grad (handled by Trainer/Accelerator) ---
+        # Note: The original `Trainer.training_step` doesn't explicitly call optimizer.step()
+        #       or zero_grad() here. These are handled within the main train loop
+        #       calling this `training_step`. The key is that we calculated the norm
+        #       *before* those actions happen on the gradients computed in *this* step.
+
+        return loss.detach() / self.args.gradient_accumulation_steps
+
+
+# --- Updated Custom Callback (Simplified) ---
 class FileLoggingCallback(TrainerCallback):
     """
-    A TrainerCallback that logs training loss, learning rate, grad norm,
-    and other metrics to a file.
+    Logs metrics including grad norm (retrieved from Trainer state).
     """
-    def __init__(self, log_file_path="training_log.log", model: Optional[PreTrainedModel] = None):
+    def __init__(self, log_file_path="training_log.log"):
         super().__init__()
         self.log_file_path = log_file_path
-        self.model = model # Store the model reference
-        # Ensure the directory exists
         log_dir = os.path.dirname(log_file_path)
         if log_dir and not os.path.exists(log_dir):
              os.makedirs(log_dir, exist_ok=True)
-        # Write header
         with open(self.log_file_path, "w") as f:
-            # Add GradNorm to header
-            f.write("Step\tEpoch\tLoss\tLearningRate\tGradNorm\n")
+            f.write("Step\tEpoch\tLoss\tLearningRate\tGradNorm\n") # Added GradNorm header
 
-    # Store model reference when training begins if not provided initially
-    def on_train_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, model: PreTrainedModel = None, **kwargs):
-        if self.model is None and model is not None:
-            self.model = model
-        if self.model is None:
-            logging.warning("FileLoggingCallback requires the model to be passed during init or accessible in on_train_begin to log grad norm.")
-
-
-    def _get_grad_norm(self) -> Optional[float]:
-        """Calculates the total gradient norm."""
-        if self.model is None or not hasattr(self.model, 'parameters'):
-            return None
-
-        total_norm = 0.0
-        parameters = [p for p in self.model.parameters() if p.grad is not None and p.requires_grad]
-        if not parameters: # Check if list is empty
-            return 0.0 # Or None, depending on how you want to represent no gradients
-
-        device = parameters[0].grad.device # Ensure norm calculation happens on the correct device
-        try:
-            # Use torch.norm for efficient calculation
-            # Need to be careful with dtype for norm calculation, especially with AMP
-            # Convert gradients to float32 for norm calculation for stability
-            total_norm = torch.norm(torch.stack([torch.norm(p.grad.detach().to(torch.float32), 2).to(device) for p in parameters]), 2).item()
-        except Exception as e:
-            logging.warning(f"Could not compute grad norm: {e}")
-            return None
-        return total_norm
+    # No need for model reference here anymore
+    # No need for _get_grad_norm here anymore
 
     def on_log(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, logs: Optional[Dict[str, float]] = None, **kwargs):
-        """
-        Event called by Trainer when logging metrics.
-        """
-        if state.is_world_process_zero and logs is not None: # Only log on the main process
+        if state.is_world_process_zero and logs is not None:
             step = state.global_step
-            epoch = logs.get('epoch', state.epoch) # Get epoch info if available
+            # Prefer epoch from logs if available (more precise), else use state
+            epoch = logs.get("epoch", state.epoch)
 
             log_line_parts = [f"{step}", f"{epoch:.2f}"]
 
@@ -69,35 +120,24 @@ class FileLoggingCallback(TrainerCallback):
             if 'loss' in logs: # Typically indicates a training log
                 log_line_parts.extend([loss_str, lr_str])
 
-                # --- Calculate and Log Grad Norm ---
-                # Note: This calculates the norm *at the time of logging*.
-                # Gradients might be None if logging happens long after the optimizer step,
-                # or if not training. Best effort calculation.
-                grad_norm = self._get_grad_norm()
+                # --- Retrieve and Log Grad Norm from state ---
+                # Get the grad norm stored by the custom Trainer
+                grad_norm = getattr(state, 'last_grad_norm', None) # Safely get the attribute
                 grad_norm_str = f"{grad_norm:.4f}" if grad_norm is not None else "N/A"
                 log_line_parts.append(grad_norm_str)
 
-                # --- Log other metrics potentially present in logs ---
-                # Example: steps per second (often added by Trainer)
+                # Optionally log other metrics
                 steps_per_sec = logs.get('train_steps_per_second', None)
                 if steps_per_sec:
                      log_line_parts.append(f"{steps_per_sec:.2f} steps/s")
 
-                # Example: GPU memory (requires custom callback logic, see below)
-                # gpu_mem = logs.get('gpu_memory_gb', None) # Assuming another callback added this
-                # if gpu_mem:
-                #     log_line_parts.append(f"{gpu_mem:.2f} GB")
-
-
             # --- Log Evaluation Metrics (if present) ---
-            elif 'eval_loss' in logs: # Typically indicates an evaluation log
+            elif 'eval_loss' in logs:
                 eval_loss_str = f"{logs.get('eval_loss', 'N/A'):.4f}"
                 log_line_parts.extend([f"Eval Loss: {eval_loss_str}"])
-                # Add any other custom eval metrics from your compute_metrics function
                 for key, value in logs.items():
                     if key.startswith("eval_") and key != "eval_loss":
                          log_line_parts.append(f"{key}: {value:.4f}")
-
 
             # Append to the log file
             try:
@@ -107,45 +147,36 @@ class FileLoggingCallback(TrainerCallback):
                 logging.warning(f"Could not write to log file {self.log_file_path}: {e}")
 
 
-# --- Assume you have your model, datasets, etc. ---
-# model = ...
-# tokenizer = ...
-# train_dataset = ...
-# eval_dataset = ... # Optional
-# compute_metrics = ... # Optional function for evaluation
-
 # --- Configure Training Arguments ---
 training_args = TrainingArguments(
-    output_dir='./results',
+    output_dir='./results_gradnorm',         # Changed output dir
     num_train_epochs=1,
     per_device_train_batch_size=4,
-    logging_dir='./logs',
-    logging_steps=10,
-    report_to="none",
-    max_grad_norm=1.0, # <<< IMPORTANT: Enable gradient clipping for norm to be most meaningful
-    # evaluation_strategy="steps", # <<< Add if you want eval metrics logged
-    # eval_steps=100,             # <<< Frequency of evaluation
+    logging_dir='./logs_gradnorm',           # Changed log dir
+    logging_steps=10,                       # Log frequently to see results
+    report_to="none",                       # Disable other reporting for clarity
+    max_grad_norm=1.0,                      # Keep gradient clipping enabled
+    gradient_accumulation_steps=1,          # Simplest case first
+    # evaluation_strategy="steps",          # Optional: Add if you want eval metrics logged
+    # eval_steps=100,                       # Optional: Frequency of evaluation
     # ... other arguments
 )
 
-# --- Instantiate the Callback and Trainer ---
-# Pass the model ONLY IF it's already instantiated here.
-# Otherwise, the callback will grab it in on_train_begin.
+# --- Instantiate the Callback and CUSTOM Trainer ---
 file_logger = FileLoggingCallback(
-    log_file_path="my_training_run_with_gradnorm.log",
-    # model=model # Optional: pass model here if available
+    log_file_path="my_training_run_with_gradnorm_fixed.log"
 )
 
-trainer = Trainer(
+# Use the custom Trainer subclass
+trainer = TrainerWithGradNorm( # <<< Use the subclass
     model=model,
     args=training_args,
     train_dataset=train_dataset,
-    # eval_dataset=eval_dataset,          # For evaluation metrics
-    # compute_metrics=compute_metrics,    # For evaluation metrics
+    # eval_dataset=eval_dataset,
+    # compute_metrics=compute_metrics,
     tokenizer=tokenizer,
-    callbacks=[file_logger]
+    callbacks=[file_logger] # Pass the updated callback
 )
 
 # --- Start Training ---
 trainer.train()
-
