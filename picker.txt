@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rabbit Name Hunt</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Arial', sans-serif; /* Cleaner font */
+        }
+        #game-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            cursor: none; /* Hide default cursor when game is active */
+        }
+        #start-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.4)), url('data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/4QAiRXhpZgAATU0AKgAAAAgAAQESAAMAAAABAAEAAAAAAAD/2wBDAAIBAQIBAQICAgICAgICAwUDAwMDAwYEBAMFBwYHBwcGBwcICQsJCAgKCAcHCg0KCgsMDAwMBwkODw0MDgsMDAz/2wBDAQICAgMDAwYDAwYMCAcIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAz/wAARCAAaABsDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD8W6KvadpcV4kHmTSRtcTGFAsYYZG3kncP71aWl2UE0U32K5lhMbRxPMIiHk3NgY+fgZGegOPXnOFTERj/AEz6bK+FcXjJRScVzJtLmhzO0ed2i5LaNm7tWXnoc/RWrPcXAGp281zNOsKbRvckEiVBnBNZVaQnzI8vMsDHCzjCMm7p3ukmmpSi1pKSfw73NPwzqTW+p2sTJHJEZhhWRSVZsDIJGR0B49Kt2N9HoUDrJb3EAZlkEcjjfIVIIP3AcZGOTjlsZNYNFZzw8ZO7PWy3ivF4OhGnT1lBy5W7OylGMXHWLdrR0Skl3TV07d/qn2tGREKLJIZpCxDM7/UAcDJwMdzVSiitYxUVZHgYvGVsTU9rXld/10Wi7+t3uz//2Q==') center center / cover;
+            backdrop-filter: blur(3px);
+            z-index: 10;
+            color: white;
+            text-align: center;
+        }
+        .name-inputs {
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .name-input {
+            padding: 12px 15px;
+            font-size: 18px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: 300px;
+            background-color: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }
+        #start-btn {
+            padding: 15px 35px;
+            font-size: 22px;
+            background: linear-gradient(45deg, #5cb85c, #4cae4c);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            margin-top: 15px;
+        }
+        #start-btn:hover {
+            background: linear-gradient(45deg, #4cae4c, #449d44);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        #end-screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: none; /* Initially hidden */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.85);
+            z-index: 10;
+            color: white;
+            text-align: center;
+        }
+        #end-screen h1 {
+            font-size: 48px;
+            margin-bottom: 25px;
+            color: #FFD700; /* Gold */
+            text-shadow: 0 0 15px #FFD700;
+        }
+         #end-screen p {
+            font-size: 20px;
+            color: #eee;
+            margin-bottom: 15px;
+        }
+        #results-list { /* Final results list on end screen */
+            font-size: 24px;
+            list-style-type: decimal; /* Use numbers */
+            padding-left: 40px; /* Indent list */
+            margin: 0 auto; /* Center list block */
+            max-width: 400px; /* Limit width */
+            text-align: left; /* Align text within list */
+        }
+        #results-list li {
+            margin: 12px 0;
+            color: #F8F8F8;
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 8px 15px;
+            border-radius: 5px;
+        }
+        #restart-btn {
+            margin-top: 35px;
+            padding: 15px 35px;
+            font-size: 22px;
+            background: linear-gradient(45deg, #5cb85c, #4cae4c);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        #restart-btn:hover {
+             background: linear-gradient(45deg, #4cae4c, #449d44);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        #crosshair {
+            position: absolute;
+            width: 30px; /* Smaller crosshair */
+            height: 30px;
+            pointer-events: none; /* Allows clicks to pass through */
+            z-index: 5;
+            transform: translate(-50%, -50%); /* Center on cursor */
+             /* Red crosshair SVG */
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAiIGhlaWdodD0iMzAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPGNpcmNsZSBjeD0iMTUiIGN5PSIxNSIgcj0iOCIgc3Ryb2tlPSJyZWQiIHN0cm9rZS13aWR0aD0iMS41IiBmaWxsPSJub25lIi8+CiAgPGxpbmUgeDE9IjE1IiB5MT0iNSIgeDI9IjE1IiB5Mj0iMTIiIHN0cm9rZT0icmVkIiBzdHJva2Utd2lkdGg9IjEuNSIvPgogIDxsaW5lIHgxPSIxNSIgeTE9IjE4IiB4Mj0iMTUiIHkyPSIyNSIgc3Ryb2tlPSJyZWQiIHN0cm9rZS13aWR0aD0iMS41Ii8+CiAgPGxpbmUgeDE9IjUiIHkxPSIxNSIgeDI9IjEyIiB5Mj0iMTUiIHN0cm9rZT0icmVkIiBzdHJva2Utd2lkdGg9IjEuNSIvPgogIDxsaW5lIHgxPSIxOCIgeTE9IjE1IiB4Mj0iMjUiIHkyPSIxNSIgc3Ryb2tlPSJyZWQiIHN0cm9rZS13aWR0aD0iMS41Ii8+Cjwvc3ZnPg==');
+            background-repeat: no-repeat;
+            background-position: center center;
+            display: none; /* Initially hidden */
+        }
+        #score-display { /* Top Right */
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 22px;
+            font-weight: bold;
+            z-index: 5;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+            display: none; /* Initially hidden */
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 8px 12px;
+            border-radius: 5px;
+        }
+         #shot-names-display { /* Top Left - NEW */
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            z-index: 5;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+            display: none; /* Initially hidden */
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 10px 15px;
+            border-radius: 5px;
+            max-height: 300px; /* Limit height */
+            overflow-y: auto; /* Add scroll if needed */
+            width: 200px; /* Fixed width */
+        }
+        #shot-names-display h3 {
+            margin: 0 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            font-size: 16px;
+            text-align: center;
+        }
+        #shot-names-list { /* In-game list */
+             list-style-type: none;
+             padding: 0;
+             margin: 0;
+        }
+        #shot-names-list li {
+             margin-bottom: 5px;
+             color: #FFD700; /* Gold color for names */
+             font-weight: bold;
+        }
+         h1 { /* Styling for the main title on the start screen */
+            color: #fff;
+            text-shadow: 0 0 10px #FFD700, 0 0 20px #FFD700, 0 0 30px #f0f, 0 0 40px #0ff;
+            font-size: 48px; /* Larger title */
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+
+    <div id="start-screen">
+        <h1>Rabbit Name Hunt</h1>
+        <div class="name-inputs">
+            <input type="text" class="name-input" placeholder="Enter Name 1" required>
+            <input type="text" class="name-input" placeholder="Enter Name 2" required>
+            <input type="text" class="name-input" placeholder="Enter Name 3" required>
+            <input type="text" class="name-input" placeholder="Enter Name 4" required>
+            <input type="text" class="name-input" placeholder="Enter Name 5" required>
+        </div>
+        <button id="start-btn">Start Hunting</button>
+    </div>
+
+    <div id="end-screen">
+        <h1>Hunting Season Over!</h1>
+        <p>Names appeared in this order:</p>
+        <ul id="results-list"></ul>
+        <button id="restart-btn">Hunt Again?</button>
+    </div>
+
+    <div id="crosshair"></div>
+
+    <div id="score-display">
+        Names Left: <span id="names-left">5</span>
+    </div>
+
+    <div id="shot-names-display"> 
+        <h3>Shot List</h3>
+        <ul id="shot-names-list"></ul> 
+    </div>
+
+    <!-- Load libraries from CDNs -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
+    <!-- Troika is no longer needed for 3D text, but keep if other features might use it -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/troika-three-text@0.47.2/dist/troika-three-text.min.js"></script> -->
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.18.2/dist/lil-gui.umd.min.js"></script>
+
+    <script>
+        // Base64 Placeholder - Replace if you have actual sprite data
+        const spriteBase64 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/4QAiRXhpZgAATU0AKgAAAAgAAQESAAMAAAABAAEAAAAAAAD/2wBDAAIBAQIBAQICAgICAgICAwUDAwMDAwYEBAMFBwYHBwcGBwcICQsJCAgKCAcHCg0KCgsMDAwMBwkODw0MDgsMDAz/2wBDAQICAgMDAwYDAwYMCAcIDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAz/wAARCAAaABsDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD8W6KvadpcV4kHmTSRtcTGFAsYYZG3kncP71aWl2UE0U32K5lhMbRxPMIiHk3NgY+fgZGegOPXnOFTERj/AEz6bK+FcXjJRScVzJtLmhzO0ed2i5LaNm7tWXnoc/RWrPcXAGp281zNOsKbRvckEiVBnBNZVaQnzI8vMsDHCzjCMm7p3ukmmpSi1pKSfw73NPwzqTW+p2sTJHJEZhhWRSVZsDIJGR0B49Kt2N9HoUDrJb3EAZlkEcjjfIVIIP3AcZGOTjlsZNYNFZzw8ZO7PWy3ivF4OhGnT1lBy5W7OylGMXHWLdrR0Skl3TV07d/qn2tGREKLJIZpCxDM7/UAcDJwMdzVSiitYxUVZHgYvGVsTU9rXld/10Wi7+t3uz//2Q==';
+
+        // Game variables
+        let scene, camera, renderer, gui, nameSet = [], usedNames = [], rabbits = [], trees = [], shootable = true;
+        let clock, raycaster, mouse, crosshair, gameActive = false;
+        // let nameTexts = []; // No longer needed for 3D text
+        let gameContainer, shotNamesListElement; // Added shotNamesListElement
+        let audioContext; // For sound effects
+
+        // Initialize the game
+        window.addEventListener('DOMContentLoaded', init);
+
+        function init() {
+            gameContainer = document.getElementById('game-container');
+            shotNamesListElement = document.getElementById('shot-names-list'); // Get the UL element
+            // Set up event listeners
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', restartGame);
+
+            // Basic Web Audio API setup
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Initialize Three.js scene
+            setupScene();
+
+            // Start animation loop
+            animate();
+        }
+
+        function setupScene() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x66bbff); // Brighter sky blue
+            scene.fog = new THREE.Fog(0x66bbff, 50, 150); // Linear fog for depth
+
+            // Create camera
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 6, 25); // Slightly higher, further back
+            camera.lookAt(0, 2, 0); // Look slightly down towards the ground center
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+            renderer.toneMapping = THREE.ACESFilmicToneMapping; // Better color grading
+            renderer.toneMappingExposure = 1.0;
+            gameContainer.appendChild(renderer.domElement);
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+
+            // Setup lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // More ambient light
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2); // Stronger sun
+            directionalLight.position.set(80, 120, 60); // Adjust sun angle
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 10;
+            directionalLight.shadow.camera.far = 300;
+            directionalLight.shadow.camera.left = -80;
+            directionalLight.shadow.camera.right = 80;
+            directionalLight.shadow.camera.top = 80;
+            directionalLight.shadow.camera.bottom = -80;
+            directionalLight.shadow.bias = -0.001; // Adjust shadow bias to reduce artifacts
+            scene.add(directionalLight);
+            scene.add(directionalLight.target); // Make sure target is added
+            directionalLight.target.position.set(0, 0, 0); // Target the center
+
+            // Create ground
+            createGround();
+
+            // Create sky elements
+            createSky();
+
+            // Raycaster for shooting
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Setup clock for animations
+            clock = new THREE.Clock();
+
+            // Setup lil-gui (optional, can be hidden)
+            // gui = new lil.GUI();
+            // gui.hide(); // Hide by default
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function createGround() {
+            const textureLoader = new THREE.TextureLoader();
+            const grassTexture = textureLoader.load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAARKSURBVGhD7ZpLciQDDIXbO///l6MXY2kTBQUpuVw2L418gSQIm+a9v+/7vi/N8/qM3+k+7M/v/U9AIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDD0lISAgBISQEgRAQQkBICCGAhISQEAIhIISAEBKCQAgBISQEgRAQQkBICCEDT/m/Qj/+728EhIAQEkJACAkhIASERAiEgBISQEAJCSAgBISQEQiAEhJAQAkJICAEhJARCIASEkBACQkgIASEkhEQIhIAQEkJACAkhIASERAiEgBISQEAJCSAgBISQEQiAEhJAQAkJICAEhJARCIASEkBACQkgIASEkhEQIhIAQEkJACAkhIASERAiEgBISQEAJCSAgBISQEQiAEhJAQAkJICAEhJARCaQy64sQ90k572gAAAABJRU5ErkJggg==');
+            grassTexture.wrapS = THREE.RepeatWrapping;
+            grassTexture.wrapT = THREE.RepeatWrapping;
+            grassTexture.repeat.set(20, 20); // Tile the texture
+
+            const groundGeometry = new THREE.PlaneGeometry(300, 300, 100, 100); // Increased size and segments
+            const groundMaterial = new THREE.MeshStandardMaterial({
+                map: grassTexture,
+                roughness: 0.9,
+                metalness: 0.1,
+                side: THREE.DoubleSide // Render both sides
+            });
+
+            // Add subtle rolling hills
+            const vertices = groundGeometry.attributes.position.array;
+            for (let i = 0, l = vertices.length; i < l; i += 3) {
+                const x = vertices[i];
+                const z = vertices[i + 2];
+                // Gentle sine wave deformation for rolling effect
+                vertices[i + 1] = (Math.sin(x * 0.05) * Math.cos(z * 0.05)) * 1.5 + Math.random() * 0.2;
+            }
+            groundGeometry.computeVertexNormals(); // Recalculate normals after deformation
+
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2; // Rotate to lay flat
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Add some simple flowers
+            for (let i = 0; i < 250; i++) {
+                const flowerX = Math.random() * 200 - 100;
+                const flowerZ = Math.random() * 200 - 100;
+                // Sample ground height at flower position
+                const groundY = (Math.sin(flowerX * 0.05) * Math.cos(flowerZ * 0.05)) * 1.5 + Math.random() * 0.2;
+                createFlower(flowerX, groundY + 0.1, flowerZ); // Place slightly above ground
+            }
+        }
+
+         function createFlower(x, y, z) {
+            const flowerGroup = new THREE.Group();
+            flowerGroup.userData.isFlower = true; // Add flag for easier cleanup
+
+            // Stem
+            const stemGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.3, 6);
+            const stemMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 }); // Use Lambert for simpler shading
+            const stem = new THREE.Mesh(stemGeometry, stemMaterial);
+            stem.position.y = 0.15; // Center stem vertically
+            stem.castShadow = true;
+            flowerGroup.add(stem);
+
+            // Petal (simple sphere)
+            const colors = [0xFF69B4, 0xFFFF00, 0xFF6347, 0xDA70D6, 0x87CEFA, 0xFFA500, 0xFFFFFF];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const petalGeometry = new THREE.SphereGeometry(0.1, 8, 6);
+            const petalMaterial = new THREE.MeshLambertMaterial({ color: color });
+            const petal = new THREE.Mesh(petalGeometry, petalMaterial);
+            petal.position.y = 0.3; // Position at the top of the stem
+            petal.castShadow = true;
+            flowerGroup.add(petal);
+
+            flowerGroup.position.set(x, y, z);
+            flowerGroup.scale.setScalar(Math.random() * 0.5 + 0.7); // Random size
+            scene.add(flowerGroup);
+        }
+
+
+        function createSky() {
+            // Sun
+            const sunGeometry = new THREE.SphereGeometry(20, 32, 32);
+            const sunMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffddaa, // Warm yellow
+                fog: false // Sun shouldn't be affected by fog
+            });
+            const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+            sun.position.set(-150, 150, -200); // Position the sun
+            scene.add(sun);
+
+            // Clouds using simple geometry
+             for (let i = 0; i < 15; i++) {
+                createCloud(
+                    Math.random() * 300 - 150, // x
+                    80 + Math.random() * 40,  // y (height)
+                    Math.random() * 300 - 150, // z
+                    Math.random() * 10 + 8    // size
+                );
+            }
+        }
+
+        function createCloud(x, y, z, size) {
+            const cloudGroup = new THREE.Group();
+            const cloudMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.85,
+                depthWrite: false // Helps with transparency sorting issues
+            });
+
+            const numSpheres = Math.floor(Math.random() * 6) + 4; // 4-9 spheres per cloud
+            for (let i = 0; i < numSpheres; i++) {
+                const sphereSize = size * (0.4 + Math.random() * 0.6);
+                const sphereGeometry = new THREE.SphereGeometry(sphereSize, 8, 6); // Low poly spheres
+                const sphere = new THREE.Mesh(sphereGeometry, cloudMaterial);
+
+                sphere.position.set(
+                    (Math.random() - 0.5) * size * 2.5,
+                    (Math.random() - 0.5) * size * 0.8,
+                    (Math.random() - 0.5) * size * 1.5
+                );
+                sphere.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+                cloudGroup.add(sphere);
+            }
+
+            cloudGroup.position.set(x, y, z);
+            scene.add(cloudGroup);
+
+            // Add simple movement logic
+            cloudGroup.userData = {
+                isCloud: true, // Flag for identification
+                speedX: (Math.random() - 0.5) * 0.01 + 0.01, // Slow horizontal drift
+                speedZ: (Math.random() - 0.5) * 0.005,
+                update: function(dt) {
+                    cloudGroup.position.x += this.speedX * dt * 60; // Scale by approx frame rate
+                    cloudGroup.position.z += this.speedZ * dt * 60;
+                    // Wrap around screen edges
+                    if (cloudGroup.position.x > 200) cloudGroup.position.x = -200;
+                    if (cloudGroup.position.x < -200) cloudGroup.position.x = 200;
+                    if (cloudGroup.position.z > 200) cloudGroup.position.z = -200;
+                    if (cloudGroup.position.z < -200) cloudGroup.position.z = 200;
+                }
+            };
+            return cloudGroup;
+        }
+
+        function createTrees() {
+            trees = []; // Clear existing trees if restarting
+            const numTrees = 20;
+            const spawnRadiusMin = 20;
+            const spawnRadiusMax = 80;
+
+            for (let i = 0; i < numTrees; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radius = spawnRadiusMin + Math.random() * (spawnRadiusMax - spawnRadiusMin);
+                const x = Math.sin(angle) * radius + (Math.random() - 0.5) * 10; // Add some jitter
+                const z = Math.cos(angle) * radius + (Math.random() - 0.5) * 10;
+
+                 const groundY = (Math.sin(x * 0.05) * Math.cos(z * 0.05)) * 1.5 + Math.random() * 0.1; // Approx height
+
+                const tree = createTree(x, groundY, z);
+                trees.push(tree);
+            }
+        }
+
+        function createTree(x, y, z) {
+            const treeGroup = new THREE.Group();
+             treeGroup.userData.isTree = true; // Flag for identification
+            const scale = 1.0 + Math.random() * 0.5; // Randomize size
+
+            // Trunk
+            const trunkHeight = 6 + Math.random() * 3;
+            const trunkRadius = 0.5 + Math.random() * 0.3;
+            const trunkGeometry = new THREE.CylinderGeometry(trunkRadius * 0.8, trunkRadius, trunkHeight, 8); // Tapered
+            const trunkMaterial = new THREE.MeshStandardMaterial({
+                color: 0x8B4513, // Saddle Brown
+                roughness: 0.9,
+                metalness: 0.1
+            });
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.y = trunkHeight / 2; // Base of trunk at y=0
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            treeGroup.add(trunk);
+
+            // Leaves
+            const leavesMaterial = new THREE.MeshStandardMaterial({
+                color: 0x228B22, // Forest Green
+                roughness: 0.8,
+                metalness: 0.1
+            });
+
+            const leafLevels = 3 + Math.floor(Math.random() * 3);
+            let currentY = trunkHeight * 0.7;
+            let currentRadius = trunkRadius * 5 + Math.random() * 2;
+
+            for(let i = 0; i < leafLevels; i++) {
+                const numBlobs = 5 + Math.floor(Math.random() * 5);
+                for(let j = 0; j < numBlobs; j++) {
+                    const blobSize = currentRadius * (0.3 + Math.random() * 0.5);
+                    const blobGeometry = new THREE.IcosahedronGeometry(blobSize, 0); // Low poly
+                    const blob = new THREE.Mesh(blobGeometry, leavesMaterial);
+                    blob.position.set(
+                        (Math.random() - 0.5) * currentRadius * 0.8,
+                        currentY + (Math.random() - 0.3) * blobSize * 1.5, // Vertical variation
+                        (Math.random() - 0.5) * currentRadius * 0.8
+                    );
+                    blob.castShadow = true;
+                    blob.receiveShadow = true;
+                    treeGroup.add(blob);
+                }
+                 currentY += currentRadius * 0.5;
+                 currentRadius *= 0.7;
+            }
+
+
+            treeGroup.scale.set(scale, scale, scale);
+            treeGroup.rotation.y = Math.random() * Math.PI * 2;
+            treeGroup.position.set(x, y, z);
+            scene.add(treeGroup);
+
+            treeGroup.userData.boundingBox = new THREE.Box3().setFromObject(trunk);
+
+            return treeGroup;
+        }
+
+
+        function createRabbit(treeIndex) {
+            if (treeIndex < 0 || treeIndex >= trees.length) {
+                 console.error("Invalid tree index for rabbit spawn:", treeIndex);
+                 return null;
+            }
+            const tree = trees[treeIndex];
+            const treePos = tree.position.clone();
+            const treeScale = tree.scale.x; // Assuming uniform scale
+
+            // --- Rabbit Geometry ---
+            const rabbitGroup = new THREE.Group();
+            const rabbitMaterial = new THREE.MeshStandardMaterial({
+                color: 0xEAE0D5, // Off-white / beige
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            const pinkMaterial = new THREE.MeshStandardMaterial({ color: 0xFFC0CB, roughness: 0.9 });
+            const blackMaterial = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+
+            // Body
+            const bodyGeo = new THREE.SphereGeometry(0.5, 12, 8);
+            bodyGeo.scale(1, 0.8, 1.2);
+            const body = new THREE.Mesh(bodyGeo, rabbitMaterial);
+            body.position.y = 0.4;
+            body.castShadow = true;
+            rabbitGroup.add(body);
+
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.35, 12, 8);
+            const head = new THREE.Mesh(headGeo, rabbitMaterial);
+            head.position.set(0, 0.8, 0.4);
+            head.castShadow = true;
+            rabbitGroup.add(head);
+
+            // Ears
+            const earHeight = 0.7;
+            const earRadius = 0.08;
+            const earGeo = new THREE.CylinderGeometry(earRadius, earRadius * 0.7, earHeight, 6);
+            earGeo.translate(0, earHeight / 2, 0);
+            const posAttr = earGeo.attributes.position;
+            for (let i = 0; i < posAttr.count; i++) {
+                const y = posAttr.getY(i);
+                const bendFactor = Math.sin((y / earHeight) * Math.PI / 2);
+                posAttr.setX(i, posAttr.getX(i) + bendFactor * 0.1);
+            }
+            earGeo.computeVertexNormals();
+
+
+            const leftEar = new THREE.Mesh(earGeo, rabbitMaterial);
+            leftEar.position.set(-0.15, 1.05, 0.35);
+            leftEar.rotation.set(-Math.PI / 10, Math.PI / 16, Math.PI / 12);
+            leftEar.castShadow = true;
+            rabbitGroup.add(leftEar);
+
+            const rightEar = leftEar.clone();
+            rightEar.position.x = 0.15;
+            rightEar.rotation.z *= -1;
+            rabbitGroup.add(rightEar);
+
+            const innerEarGeo = new THREE.CylinderGeometry(earRadius * 0.6, earRadius * 0.4, earHeight * 0.8, 6);
+            innerEarGeo.translate(0, earHeight / 2 * 0.8, 0.01);
+            const leftInner = new THREE.Mesh(innerEarGeo, pinkMaterial);
+            leftEar.add(leftInner);
+            const rightInner = leftInner.clone();
+            rightEar.add(rightInner);
+
+            // Eyes
+            const eyeGeo = new THREE.SphereGeometry(0.05, 6, 4);
+            const leftEye = new THREE.Mesh(eyeGeo, blackMaterial);
+            leftEye.position.set(-0.12, 0.9, 0.7);
+            head.add(leftEye);
+
+            const rightEye = leftEye.clone();
+            rightEye.position.x = 0.12;
+            head.add(rightEye);
+
+            // Nose
+            const noseGeo = new THREE.SphereGeometry(0.06, 6, 4);
+            const nose = new THREE.Mesh(noseGeo, pinkMaterial);
+            nose.position.set(0, 0.8, 0.72);
+            head.add(nose);
+
+            // Tail
+            const tailGeo = new THREE.SphereGeometry(0.2, 8, 6);
+            const tail = new THREE.Mesh(tailGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }));
+            tail.position.set(0, 0.3, -0.55);
+            body.add(tail);
+            tail.castShadow = true;
+
+            // --- Positioning ---
+            const treeRadiusEstimate = (tree.userData.boundingBox.max.x - tree.userData.boundingBox.min.x) * treeScale * 0.6;
+            const distanceFromTrunk = treeRadiusEstimate + 0.2 + Math.random() * 0.5;
+            const angleRelativeToTree = Math.random() * Math.PI * 1.5 - Math.PI * 0.75;
+
+            const rabbitX = treePos.x + Math.cos(angleRelativeToTree) * distanceFromTrunk;
+            const rabbitZ = treePos.z + Math.sin(angleRelativeToTree) * distanceFromTrunk;
+            const rabbitGroundY = (Math.sin(rabbitX * 0.05) * Math.cos(rabbitZ * 0.05)) * 1.5 + Math.random() * 0.1;
+
+            rabbitGroup.position.set(rabbitX, rabbitGroundY, rabbitZ);
+            const lookTarget = new THREE.Vector3( camera.position.x * 0.5, rabbitGroundY + 1.0, camera.position.z * 0.5 );
+            rabbitGroup.lookAt(lookTarget);
+            rabbitGroup.rotation.y += (Math.random() - 0.5) * 0.4;
+
+
+            scene.add(rabbitGroup);
+
+            // --- Game Logic Data ---
+            rabbitGroup.userData = {
+                isRabbit: true, // Flag to identify rabbit groups
+                isShot: false,
+                appearTime: clock.getElapsedTime(),
+                stayDuration: 1.0 + Math.random() * 2.5, // 1-2 seconds visible
+                associatedName: null,
+                // associatedText: null, // Removed 3D text
+                treeIndex: treeIndex,
+                initialY: rabbitGroundY,
+                bobblePhase: Math.random() * Math.PI * 2,
+                update: function(dt) {
+                    const currentTime = clock.getElapsedTime();
+                    if (this.isShot) {
+                        // Falling animation
+                        if (rabbitGroup.position.y > this.initialY - 1.5) { // Fall below ground level
+                            rabbitGroup.position.y -= dt * 3; // Fall speed
+                            rabbitGroup.rotation.x += dt * 5; // Tumble
+                            rabbitGroup.rotation.z += dt * 2;
+                        }
+                        // NO NEED TO UPDATE associatedText position anymore
+                    } else {
+                        // Bobble animation
+                        const bobbleAmount = Math.sin(currentTime * 4 + this.bobblePhase) * 0.05;
+                        rabbitGroup.position.y = this.initialY + bobbleAmount;
+
+                        // Check if rabbit should disappear
+                        if (currentTime - this.appearTime > this.stayDuration) {
+                            scene.remove(rabbitGroup);
+                            const index = rabbits.findIndex(r => r === rabbitGroup);
+                            if (index > -1) rabbits.splice(index, 1);
+                            // NO NEED TO REMOVE associatedText anymore
+                        }
+                    }
+                }
+            };
+            return rabbitGroup;
+        }
+
+        // --- REMOVED createNameText function ---
+
+        function setupCrosshair() {
+            crosshair = document.getElementById('crosshair');
+            crosshair.style.display = 'block'; // Make it visible
+
+            updateCrosshairPosition({ clientX: window.innerWidth / 2, clientY: window.innerHeight / 2 });
+
+            gameContainer.addEventListener('mousemove', updateCrosshairPosition);
+            gameContainer.addEventListener('click', handleShoot);
+
+            gameContainer.addEventListener('click', () => {
+                if (gameActive && document.pointerLockElement !== gameContainer) {
+                    gameContainer.requestPointerLock = gameContainer.requestPointerLock || gameContainer.mozRequestPointerLock;
+                    gameContainer.requestPointerLock();
+                }
+            });
+
+            document.addEventListener('pointerlockchange', lockChangeAlert, false);
+            document.addEventListener('mozpointerlockchange', lockChangeAlert, false);
+        }
+
+        function lockChangeAlert() {
+            if (document.pointerLockElement === gameContainer || document.mozPointerLockElement === gameContainer) {
+                console.log('Pointer Lock active.');
+                 gameContainer.addEventListener('mousemove', updateCrosshairPointerLock, true);
+            } else {
+                console.log('Pointer Lock deactivated.');
+                gameContainer.removeEventListener('mousemove', updateCrosshairPointerLock, true);
+            }
+        }
+
+        function updateCrosshairPosition(event) {
+             if (!gameActive || document.pointerLockElement === gameContainer) return;
+
+            const rect = gameContainer.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            crosshair.style.left = x + 'px';
+            crosshair.style.top = y + 'px';
+
+            mouse.x = (x / rect.width) * 2 - 1;
+            mouse.y = -(y / rect.height) * 2 + 1;
+        }
+
+        function updateCrosshairPointerLock(event) {
+             if (!gameActive || document.pointerLockElement !== gameContainer) return;
+
+            const rect = gameContainer.getBoundingClientRect();
+            let currentX = parseFloat(crosshair.style.left || rect.width / 2);
+            let currentY = parseFloat(crosshair.style.top || rect.height / 2);
+
+            currentX += event.movementX;
+            currentY += event.movementY;
+
+            currentX = Math.max(0, Math.min(rect.width, currentX));
+            currentY = Math.max(0, Math.min(rect.height, currentY));
+
+            crosshair.style.left = currentX + 'px';
+            crosshair.style.top = currentY + 'px';
+
+            mouse.x = (currentX / rect.width) * 2 - 1;
+            mouse.y = -(currentY / rect.height) * 2 + 1;
+        }
+
+
+        function handleShoot(event) {
+            if (!gameActive || !shootable || nameSet.length === 0) return;
+
+            playGunshot();
+            raycaster.setFromCamera(mouse, camera);
+
+            const rabbitMeshes = [];
+             scene.traverse(obj => {
+                if (obj.isGroup && obj.userData.isRabbit) {
+                     obj.traverse(child => { if (child.isMesh) rabbitMeshes.push(child); });
+                }
+            });
+
+            const intersects = raycaster.intersectObjects(rabbitMeshes, false);
+
+            if (intersects.length > 0) {
+                let hitObject = intersects[0].object;
+                let rabbitGroup = null;
+                while (hitObject) {
+                    if (hitObject.isGroup && hitObject.userData.isRabbit) {
+                        rabbitGroup = hitObject;
+                        break;
+                    }
+                     if (!hitObject.parent || hitObject === scene) break;
+                    hitObject = hitObject.parent;
+                }
+
+                if (rabbitGroup && !rabbitGroup.userData.isShot) {
+                     console.log("Rabbit Hit!", rabbitGroup);
+                    shootRabbit(rabbitGroup);
+                    playHitSound();
+                } else {
+                     console.log("Missed or hit already shot rabbit", rabbitGroup);
+                }
+            } else {
+                 console.log("Missed");
+            }
+
+            shootable = false;
+            setTimeout(() => { shootable = true; }, 250); // Slightly faster shooting allowed
+        }
+
+
+        function playSound(type) {
+            if (!audioContext) return;
+            let oscillator, gainNode, frequency, duration, volume, decayTime;
+
+            switch (type) {
+                case 'gunshot':
+                    oscillator = audioContext.createOscillator();
+                    gainNode = audioContext.createGain();
+                    frequency = 120; duration = 0.15; volume = 0.4; decayTime = 0.1;
+                    oscillator.type = 'sawtooth';
+                    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.5, audioContext.currentTime + duration * 0.5);
+                    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + decayTime);
+                    oscillator.connect(gainNode); gainNode.connect(audioContext.destination);
+                    oscillator.start(audioContext.currentTime); oscillator.stop(audioContext.currentTime + duration);
+
+                    const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.1, audioContext.sampleRate);
+                    const output = noiseBuffer.getChannelData(0);
+                    for (let i = 0; i < output.length; i++) output[i] = Math.random() * 2 - 1;
+                    const noiseSource = audioContext.createBufferSource(); noiseSource.buffer = noiseBuffer;
+                    const noiseGain = audioContext.createGain();
+                    noiseGain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                    noiseGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+                    noiseSource.connect(noiseGain); noiseGain.connect(audioContext.destination);
+                    noiseSource.start(audioContext.currentTime); noiseSource.stop(audioContext.currentTime + 0.1);
+                    break;
+                case 'hit':
+                    oscillator = audioContext.createOscillator();
+                    gainNode = audioContext.createGain();
+                    frequency = 900; duration = 0.2; volume = 0.3; decayTime = 0.15;
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + decayTime);
+                    oscillator.connect(gainNode); gainNode.connect(audioContext.destination);
+                    oscillator.start(audioContext.currentTime); oscillator.stop(audioContext.currentTime + duration);
+                    break;
+            }
+        }
+        function playGunshot() { playSound('gunshot'); }
+        function playHitSound() { playSound('hit'); }
+
+
+         function shootRabbit(rabbit) {
+            if (!rabbit || !rabbit.userData || rabbit.userData.isShot) return;
+
+            rabbit.userData.isShot = true;
+
+            if (nameSet.length > 0) {
+                const nameIndex = Math.floor(Math.random() * nameSet.length);
+                const name = nameSet[nameIndex];
+                nameSet.splice(nameIndex, 1);
+                usedNames.push(name); // Keep track for final screen
+
+                rabbit.userData.associatedName = name; // Store name with rabbit data if needed later
+
+                // --- Update the on-screen list ---
+                const listItem = document.createElement('li');
+                listItem.textContent = name;
+                shotNamesListElement.appendChild(listItem);
+                // Scroll to bottom of list if it overflows
+                const listContainer = document.getElementById('shot-names-display');
+                 listContainer.scrollTop = listContainer.scrollHeight;
+                // ---------------------------------
+
+                // Update score display
+                document.getElementById('names-left').textContent = nameSet.length;
+
+                // Check for game over condition
+                if (nameSet.length === 0) {
+                    console.log("All names used! Ending game soon.");
+                    setTimeout(endGame, 3000); // Shortened delay slightly
+                }
+            } else {
+                 console.warn("Shot a rabbit, but no names left in nameSet.");
+            }
+        }
+
+        function spawnRabbit() {
+            if (!gameActive || nameSet.length === 0 || trees.length === 0) return;
+
+             // Limit concurrent rabbits
+            if (rabbits.length >= 5) { // Allow slightly more rabbits on screen
+                 // console.log("Max rabbits reached, waiting...");
+                 setTimeout(spawnRabbit, 800); // Check again sooner
+                 return;
+            }
+
+            let attempts = 0;
+            let chosenTreeIndex = -1;
+            while (attempts < trees.length * 2) {
+                 let potentialIndex = Math.floor(Math.random() * trees.length);
+                 // Basic check is enough now, don't need complex free check
+                 chosenTreeIndex = potentialIndex;
+                 break;
+                 attempts++;
+            }
+
+
+            if (chosenTreeIndex !== -1) {
+                const newRabbit = createRabbit(chosenTreeIndex);
+                if (newRabbit) {
+                    rabbits.push(newRabbit);
+                    // console.log(`Spawned rabbit at tree ${chosenTreeIndex}. Total rabbits: ${rabbits.length}`);
+                } else {
+                     console.error("Failed to create rabbit.");
+                }
+            } else {
+                console.log("Could not find a tree to spawn rabbit (shouldn't happen with current logic).");
+            }
+
+
+            // Schedule the next spawn attempt - MORE FREQUENTLY
+            const spawnDelay = 500 + Math.random() * 1000; // 0.5 - 1.5 seconds delay
+            setTimeout(spawnRabbit, spawnDelay);
+        }
+
+        function startGame() {
+            // 1. Get names
+            const nameInputs = document.querySelectorAll('.name-input');
+            nameSet = [];
+            usedNames = [];
+            for (let i = 0; i < nameInputs.length; i++) {
+                const name = nameInputs[i].value.trim();
+                nameSet.push(name || `Player ${i + 1}`);
+            }
+
+            if (nameSet.length === 0) {
+                 alert("Please enter at least one name!");
+                 return;
+            }
+
+            // 2. Hide Start Screen, Show Game UI
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('score-display').style.display = 'block';
+            document.getElementById('shot-names-display').style.display = 'block'; // Show the list container
+            shotNamesListElement.innerHTML = ''; // Clear the list content
+            document.getElementById('names-left').textContent = nameSet.length;
+
+
+            // 3. Setup Scene Elements
+            cleanUpScene();
+            createTrees();
+
+            // 4. Reset Game State Variables
+            rabbits = [];
+            // nameTexts = []; // No longer needed
+            shootable = true;
+            gameActive = true;
+            if (!clock.running) clock.start(); // Ensure clock is running
+
+            // 5. Setup Controls
+            setupCrosshair();
+
+            // 6. Start Game Logic
+            console.log("Game Starting with names:", nameSet);
+            spawnRabbit();
+        }
+
+        function endGame() {
+            console.log("Game Ending.");
+            gameActive = false;
+
+            if (document.exitPointerLock) document.exitPointerLock();
+            else if (document.mozExitPointerLock) document.mozExitPointerLock();
+
+            // Hide Game UI, Show End Screen
+            document.getElementById('crosshair').style.display = 'none';
+            document.getElementById('score-display').style.display = 'none';
+            document.getElementById('shot-names-display').style.display = 'none'; // Hide in-game list
+            const endScreen = document.getElementById('end-screen');
+            endScreen.style.display = 'flex';
+
+            // Remove gameplay event listeners
+            gameContainer.removeEventListener('mousemove', updateCrosshairPosition);
+            gameContainer.removeEventListener('click', handleShoot);
+            gameContainer.removeEventListener('mousemove', updateCrosshairPointerLock, true);
+            document.removeEventListener('pointerlockchange', lockChangeAlert, false);
+            document.removeEventListener('mozpointerlockchange', lockChangeAlert, false);
+
+            // Display final results
+            const resultsList = document.getElementById('results-list');
+            resultsList.innerHTML = ''; // Clear previous results
+            usedNames.forEach((name) => { // Index not needed as list provides numbering
+                const li = document.createElement('li');
+                li.textContent = `${name}`;
+                resultsList.appendChild(li);
+            });
+
+            // clock.stop(); // Optional
+        }
+
+         function cleanUpScene() {
+             console.log("Cleaning up scene...");
+            // Remove objects by flag for better reliability
+            const objectsToRemove = [];
+             scene.traverse(obj => {
+                 if (obj.userData.isRabbit || obj.userData.isTree || obj.userData.isCloud || obj.userData.isFlower) {
+                    objectsToRemove.push(obj);
+                 }
+                  // Remove lights? Only if necessary, usually they can stay.
+                  // Remove ground? Usually stays.
+             });
+
+              objectsToRemove.forEach(obj => {
+                  // Remove children first? Generally not needed if removing the group.
+                  if (obj.parent) {
+                      obj.parent.remove(obj);
+                  }
+                  // Optional: Dispose geometry/material if performance issues arise
+                  // if (obj.geometry) obj.geometry.dispose();
+                  // if (obj.material) {
+                  //     if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+                  //     else obj.material.dispose();
+                  // }
+              });
+
+            // Reset arrays
+            rabbits = [];
+            trees = [];
+            // nameTexts = []; // Not needed anymore
+
+            console.log("Scene cleanup finished.");
+        }
+
+
+        function restartGame() {
+            console.log("Restarting game...");
+            document.getElementById('end-screen').style.display = 'none';
+            cleanUpScene();
+            nameSet = [];
+            usedNames = [];
+            gameActive = false;
+            document.getElementById('start-screen').style.display = 'flex';
+            document.getElementById('shot-names-display').style.display = 'none'; // Hide list on restart
+            shotNamesListElement.innerHTML = ''; // Clear list content
+        }
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+
+            if (gameActive) {
+                 for (let i = rabbits.length - 1; i >= 0; i--) {
+                    const rabbit = rabbits[i];
+                    // Check parent just in case it was removed externally somehow
+                    if (rabbit.parent && rabbit.userData && rabbit.userData.update) {
+                        rabbit.userData.update(dt);
+                    } else if (!rabbit.parent) {
+                        // Rabbit was already removed, clean up array
+                        rabbits.splice(i, 1);
+                    }
+                 }
+                // NO NEED TO UPDATE nameTexts anymore
+            }
+
+            // Update clouds
+            scene.traverse(child => {
+                if (child.userData && child.userData.isCloud && child.userData.update) {
+                    child.userData.update(dt);
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+    </script>
+</body>
+</html>
