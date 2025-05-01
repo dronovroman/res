@@ -1,0 +1,43 @@
+# ---- locking_patch.py  ---------------------------------------------
+import pathlib
+import portalocker               # pip install portalocker
+import pandas as pd
+from portalocker import Lock, exceptions
+
+LOCK_TIMEOUT = 6                 # seconds (change if you like)
+
+# keep originals so we can still call them
+_orig_read_parquet      = pd.read_parquet
+_orig_to_parquet        = pd.DataFrame.to_parquet
+
+def _lock_path(file_path):
+    """Return <file>.lock as pathlib.Path even if file_path is str."""
+    p = pathlib.Path(file_path)
+    return p.with_suffix(p.suffix + '.lock')
+
+def _with_lock(file_path, fn, *args, **kwargs):
+    """
+    Generic helper: run fn(*args, **kwargs) under an EXCLUSIVE lock.
+    `file_path` is only used to know which .lock file to open.
+    """
+    lock_file_path = _lock_path(file_path)
+
+    # open in append-mode so it exists & can be 0-byte
+    with Lock(lock_file_path, mode='a', flags=portalocker.LOCK_EX, timeout=LOCK_TIMEOUT):
+        return fn(*args, **kwargs)        # do the actual read/write
+
+# ---------------- monkey patches ------------------------------------
+
+def _locked_read_parquet(file_path, *args, **kwargs):
+    return _with_lock(file_path,
+                      _orig_read_parquet,
+                      file_path, *args, **kwargs)
+
+def _locked_to_parquet(self, file_path, *args, **kwargs):
+    return _with_lock(file_path,
+                      _orig_to_parquet,
+                      self, file_path, *args, **kwargs)
+
+# ONE-LINER “monkey patch”
+pd.read_parquet            = _locked_read_parquet
+pd.DataFrame.to_parquet    = _locked_to_parquet
