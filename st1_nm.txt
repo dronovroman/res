@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheel of Names - Round Edition</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            background-color: #2c2c2c;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            text-align: center;
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+            width: calc(100% - 60px);
+            max-width: 450px;
+            box-sizing: border-box;
+        }
+
+        .hidden {
+            opacity: 0 !important;
+            transform: scale(0.9) !important;
+            pointer-events: none !important;
+            position: absolute !important;
+        }
+
+        h1, h2 {
+            color: #4CAF50;
+            margin-top: 0;
+        }
+
+        input[type="text"], button {
+            padding: 12px 18px;
+            margin: 8px 0;
+            border-radius: 6px;
+            border: 1px solid #444;
+            font-size: 16px;
+            box-sizing: border-box;
+            width: 100%;
+        }
+        
+        input[type="text"] {
+            background-color: #333;
+            color: #e0e0e0;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        button:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+
+        #namesList {
+            list-style: none;
+            padding: 0;
+            margin-top: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            border-radius: 6px;
+        }
+
+        #namesList li {
+            background-color: #383838;
+            padding: 8px 12px;
+            margin-bottom: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 15px;
+        }
+        #namesList li:first-child { border-top-left-radius: 5px; border-top-right-radius: 5px; }
+        #namesList li:last-child { margin-bottom: 0; border-bottom-left-radius: 5px; border-bottom-right-radius: 5px; }
+        
+        #namesList li button {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            font-size: 12px;
+            margin-left: 10px;
+            width: auto;
+            line-height: 1;
+        }
+        #namesList li button:hover { background-color: #d32f2f; }
+
+        #gameScreen {
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            max-width: none;
+        }
+        
+        #canvasContainer {
+            width: 80vmin;
+            height: 80vmin;
+            max-width: 500px;
+            max-height: 500px;
+            position: relative;
+        }
+
+        #spinButton {
+            margin-top: 25px;
+            font-size: 18px;
+            padding: 15px 30px;
+            width: auto;
+        }
+
+        #winnerScreen { text-align: center; }
+
+        #winnerName {
+            font-size: clamp(28px, 8vw, 48px);
+            color: #FFC107;
+            margin: 20px 0;
+            font-weight: bold;
+            animation: popIn 0.5s ease-out;
+            word-break: break-all;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .pointer-indicator {
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 30px solid #FFC107;
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="inputScreen" class="container">
+        <h1>Wheel of Names</h1>
+        <input type="text" id="nameInput" placeholder="Enter a name">
+        <button id="addNameButton">Add Name</button>
+        <ul id="namesList"></ul>
+        <button id="startGameButton" disabled>Start Game (min. 2 names)</button>
+    </div>
+
+    <div id="gameScreen" class="container hidden">
+        <div id="canvasContainer">
+            <div class="pointer-indicator"></div>
+        </div>
+        <button id="spinButton">Spin the Wheel!</button>
+    </div>
+
+    <div id="winnerScreen" class="container hidden">
+        <h2>Congratulations!</h2>
+        <p id="winnerText">The winner is:</p>
+        <p id="winnerName"></p>
+        <button id="playAgainButton">Play Again</button>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.157.0/build/three.module.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        let scene, camera, renderer, wheel, wheelGeometry;
+        let wheelMaterials = []; // To store materials for disposal
+        let names = [];
+        const baseColors = [0xff6347, 0x4682b4, 0x32cd32, 0xffd700, 0x6a5acd, 0xff4500, 0x20b2aa, 0xda70d6];
+
+        let targetRotationY = 0;
+        let currentSpeedY = 0;
+        let isSpinning = false;
+        
+        const ACCELERATION = 0.002;
+        let MAX_SPEED = 0.15;
+        const FRICTION = 0.99;
+        const STOP_THRESHOLD = 0.0005;
+        const POINTER_TARGET_ANGLE = Math.PI / 2; 
+        const VISUAL_SEGMENTS = 64; // For a round looking wheel
+
+        const inputScreen = document.getElementById('inputScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const winnerScreen = document.getElementById('winnerScreen');
+        const nameInput = document.getElementById('nameInput');
+        const addNameButton = document.getElementById('addNameButton');
+        const namesList = document.getElementById('namesList');
+        const startGameButton = document.getElementById('startGameButton');
+        const spinButton = document.getElementById('spinButton');
+        const winnerNameDisplay = document.getElementById('winnerName');
+        const playAgainButton = document.getElementById('playAgainButton');
+        const canvasContainer = document.getElementById('canvasContainer');
+
+        function updateNamesList() {
+            namesList.innerHTML = '';
+            names.forEach((name, index) => {
+                const li = document.createElement('li');
+                li.textContent = name;
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = '✖';
+                removeBtn.type = 'button';
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    names.splice(index, 1);
+                    updateNamesList();
+                };
+                li.appendChild(removeBtn);
+                namesList.appendChild(li);
+            });
+            startGameButton.disabled = names.length < 2;
+        }
+
+        addNameButton.addEventListener('click', () => {
+            const name = nameInput.value.trim();
+            if (name) {
+                if (names.length < 20) {
+                    names.push(name);
+                    nameInput.value = '';
+                    updateNamesList();
+                } else {
+                    alert("Maximum of 20 names allowed.");
+                }
+            }
+            nameInput.focus();
+        });
+        
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addNameButton.click();
+        });
+
+        startGameButton.addEventListener('click', () => {
+            inputScreen.classList.add('hidden');
+            winnerScreen.classList.add('hidden');
+            gameScreen.classList.remove('hidden');
+            initThree();
+            createWheel();
+            animate();
+            spinButton.disabled = false;
+            isSpinning = false;
+            currentSpeedY = 0;
+            if(wheel) wheel.rotation.y = 0;
+        });
+
+        spinButton.addEventListener('click', () => {
+            if (isSpinning) return;
+            
+            isSpinning = true;
+            spinButton.disabled = true;
+
+            const numLogicalSegments = names.length;
+            const winningSegmentIndex = Math.floor(Math.random() * numLogicalSegments);
+            const anglePerLogicalSegment = (2 * Math.PI) / numLogicalSegments;
+
+            targetRotationY = POINTER_TARGET_ANGLE - (winningSegmentIndex + 0.5) * anglePerLogicalSegment;
+            
+            const currentRotationY = wheel.rotation.y;
+            let shortestAngleToTarget = (targetRotationY - currentRotationY) % (2 * Math.PI);
+            if (shortestAngleToTarget > Math.PI) shortestAngleToTarget -= 2 * Math.PI;
+            if (shortestAngleToTarget < -Math.PI) shortestAngleToTarget += 2 * Math.PI;
+
+            const fullRotations = (3 + Math.floor(Math.random() * 3)) * 2 * Math.PI;
+            targetRotationY = currentRotationY + fullRotations + shortestAngleToTarget;
+            
+            MAX_SPEED = 0.10 + Math.random() * 0.1;
+        });
+
+        playAgainButton.addEventListener('click', () => {
+            winnerScreen.classList.add('hidden');
+            inputScreen.classList.remove('hidden');
+            
+            if (renderer) {
+                renderer.dispose();
+                if(renderer.domElement.parentNode) {
+                     renderer.domElement.parentNode.removeChild(renderer.domElement);
+                }
+            }
+            wheelMaterials.forEach(material => {
+                if (material.map) material.map.dispose();
+                material.dispose();
+            });
+            wheelMaterials = [];
+            if (wheelGeometry) wheelGeometry.dispose();
+            
+            names = [];
+            updateNamesList();
+        });
+
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222); 
+
+            const aspect = canvasContainer.clientWidth / canvasContainer.clientHeight;
+            camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+            camera.position.set(0, 2.5, 3.5); 
+            camera.lookAt(0, 0, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(canvasContainer.clientWidth, canvasContainer.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            canvasContainer.appendChild(renderer.domElement);
+            
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            directionalLight.position.set(3, 5, 4);
+            scene.add(directionalLight);
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+        
+        function onWindowResize() {
+            if (!camera || !renderer || !canvasContainer) return;
+            const newWidth = canvasContainer.clientWidth;
+            const newHeight = canvasContainer.clientHeight;
+            
+            if (newWidth === 0 || newHeight === 0) return;
+
+            camera.aspect = newWidth / newHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(newWidth, newHeight);
+        }
+
+        function createWheelTopAtlasTexture(namesArray, radiusOnTexture) {
+            const canvas = document.createElement('canvas');
+            const textureSize = 1024; // Fixed size for the atlas texture
+            canvas.width = textureSize;
+            canvas.height = textureSize;
+            
+            const ctx = canvas.getContext('2d');
+            const centerX = textureSize / 2;
+            const centerY = textureSize / 2;
+            const numLogicalSegments = namesArray.length;
+            const anglePerLogicalSegment = (2 * Math.PI) / numLogicalSegments;
+
+            // This offset aligns the texture's segments with the cylinder's geometry segments
+            // if CylinderGeometry thetaStart is also this value.
+            const textureRotationOffset = -anglePerLogicalSegment / 2; 
+
+            for (let i = 0; i < numLogicalSegments; i++) {
+                const startAngle = i * anglePerLogicalSegment + textureRotationOffset;
+                const endAngle = (i + 1) * anglePerLogicalSegment + textureRotationOffset;
+                const segmentMidAngle = (startAngle + endAngle) / 2;
+
+                // Draw segment color
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radiusOnTexture, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = `#${baseColors[i % baseColors.length].toString(16).padStart(6, '0')}`;
+                ctx.fill();
+
+                // Draw text
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(segmentMidAngle);
+
+                // Adjust text rotation so it's upright
+                let textAngleCorrection = 0;
+                const normalizedMidAngle = (segmentMidAngle % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+                if (normalizedMidAngle > Math.PI / 2 && normalizedMidAngle < 3 * Math.PI / 2) {
+                    textAngleCorrection = Math.PI; // Flip text if it's on the "left" side
+                }
+                ctx.rotate(textAngleCorrection);
+                
+                const name = namesArray[i];
+                let fontSize = Math.min(radiusOnTexture * 0.3, (radiusOnTexture * 0.8) / (name.length * 0.5 + 1));
+                fontSize = Math.max(12, Math.floor(fontSize)); // Min font size
+                ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                let textRadius = radiusOnTexture * 0.65;
+                if (textAngleCorrection === Math.PI) textRadius *= -1; // Ensure text is still outward
+
+                ctx.fillText(name, textRadius, 0, radiusOnTexture * 0.5); // Max width constraint
+                ctx.restore();
+            }
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+
+        function createWheel() {
+            if (wheel) scene.remove(wheel);
+            wheelMaterials.forEach(material => { // Clean up old materials
+                if (material.map) material.map.dispose();
+                material.dispose();
+            });
+            wheelMaterials = [];
+            if (wheelGeometry) wheelGeometry.dispose();
+            
+            const numLogicalSegments = names.length;
+            const wheelRadius = 1.5;
+            const wheelThickness = 0.2;
+            const anglePerLogicalSegment = (2 * Math.PI) / numLogicalSegments;
+
+            // thetaStart for geometry should match texture's effective start for alignment
+            // If texture draws segment 0 centered at its 0-angle, geometry should match.
+            const geometryThetaStart = -anglePerLogicalSegment / 2;
+
+            wheelGeometry = new THREE.CylinderGeometry(
+                wheelRadius, wheelRadius, wheelThickness, 
+                VISUAL_SEGMENTS, 1, false, 
+                geometryThetaStart 
+            );
+            
+            const sideMaterial = new THREE.MeshStandardMaterial({ color: 0x606060, roughness: 0.6, metalness: 0.2 });
+            wheelMaterials.push(sideMaterial);
+
+            const topAtlasTexture = createWheelTopAtlasTexture(names, wheelRadius * (1024 / (2 * wheelRadius * 0.95)) * 0.9); // Scale radius for texture drawing
+            const topMaterial = new THREE.MeshStandardMaterial({ map: topAtlasTexture, roughness: 0.8, metalness: 0.1 });
+            wheelMaterials.push(topMaterial);
+            
+            const bottomMaterial = new THREE.MeshStandardMaterial({ color: 0x505050, roughness: 0.7, metalness: 0.1 });
+            wheelMaterials.push(bottomMaterial);
+            
+            // Standard CylinderGeometry material order: side, top, bottom
+            wheel = new THREE.Mesh(wheelGeometry, [sideMaterial, topMaterial, bottomMaterial]);
+            wheel.rotation.x = Math.PI / 2; 
+            scene.add(wheel);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (wheel && isSpinning) {
+                const remainingAngle = targetRotationY - wheel.rotation.y;
+
+                if (currentSpeedY < MAX_SPEED && remainingAngle > currentSpeedY * currentSpeedY / (2*ACCELERATION) + 0.1) {
+                    currentSpeedY += ACCELERATION;
+                    if (currentSpeedY > MAX_SPEED) currentSpeedY = MAX_SPEED;
+                } 
+                else {
+                    currentSpeedY *= FRICTION; 
+                    if (currentSpeedY < STOP_THRESHOLD ) {
+                        if (Math.abs(remainingAngle) < 0.05) {
+                           wheel.rotation.y = targetRotationY;
+                           currentSpeedY = 0;
+                           isSpinning = false;
+                           determineWinner();
+                        } else if (currentSpeedY < 0.0001) {
+                           isSpinning = false; 
+                           determineWinner(); 
+                        }
+                    }
+                }
+                wheel.rotation.y += currentSpeedY;
+
+            } else if (wheel && !isSpinning && currentSpeedY !== 0) { 
+                wheel.rotation.y = targetRotationY;
+                currentSpeedY = 0;
+            }
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        function determineWinner() {
+            const numLogicalSegments = names.length;
+            const anglePerLogicalSegment = (2 * Math.PI) / numLogicalSegments;
+            
+            const finalWheelRotationY = wheel.rotation.y;
+            let effectiveAngle = POINTER_TARGET_ANGLE - finalWheelRotationY;
+            effectiveAngle = (effectiveAngle % (2 * Math.PI) + (2 * Math.PI)) % (2 * Math.PI);
+            
+            const winningIndex = Math.floor(effectiveAngle / anglePerLogicalSegment);
+            
+            if (names[winningIndex]) {
+                winnerNameDisplay.textContent = names[winningIndex];
+            } else {
+                console.error("Winner index out of bounds:", winningIndex, names.length);
+                winnerNameDisplay.textContent = "Error! Spin Again."; 
+            }
+            
+            inputScreen.classList.add('hidden');
+            gameScreen.classList.add('hidden');
+            winnerScreen.classList.remove('hidden');
+        }
+
+        updateNamesList();
+    </script>
+</body>
+</html>
