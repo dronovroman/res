@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bunny Blaster 3D</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #333; color: white; cursor: none; }
+        canvas { display: block; }
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
+            z-index: 10; cursor: default;
+        }
+        .overlay-content {
+            background-color: rgba(50, 50, 50, 0.9); padding: 30px;
+            border-radius: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+        .overlay h1 { margin-top: 0; }
+        .overlay input[type="text"] {
+            display: block; margin: 10px auto; padding: 8px;
+            border-radius: 4px; border: 1px solid #ccc; width: 200px;
+        }
+        .overlay button {
+            padding: 10px 20px; font-size: 16px; background-color: #4CAF50;
+            color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 15px;
+        }
+        .overlay button:disabled { background-color: #aaa; cursor: not-allowed; }
+        #start-screen ul { list-style: none; padding: 0; }
+        #end-screen ul { list-style: decimal; padding-left: 40px; text-align: left;}
+        #end-screen li { margin-bottom: 5px; }
+
+        #crosshair {
+            position: fixed; width: 22px; height: 22px; background: transparent;
+            box-sizing: border-box; pointer-events: none; mix-blend-mode: difference;
+            z-index: 20; display: none; transform: translate(-50%, -50%);
+        }
+        #crosshair::before, #crosshair::after {
+            content: ''; position: absolute; background-color: white; 
+        }
+        #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+        #crosshair::after { width: 100%; height: 2px; top: 50%; transform: translateY(-50%); }
+
+        #name-notification {
+            position: fixed; top: 15%; left: 50%; transform: translateX(-50%);
+            padding: 12px 25px; background: rgba(20, 100, 20, 0.8); color: white;
+            font-size: 28px; font-weight: bold; border-radius: 8px;
+            display: none; z-index: 100; box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen" class="overlay">
+        <div class="overlay-content">
+            <h1>Name Bunny Blaster</h1>
+            <p>Enter 5 unique names:</p>
+            <ul>
+                <li><input type="text" id="name1" placeholder="Name 1"></li>
+                <li><input type="text" id="name2" placeholder="Name 2"></li>
+                <li><input type="text" id="name3" placeholder="Name 3"></li>
+                <li><input type="text" id="name4" placeholder="Name 4"></li>
+                <li><input type="text" id="name5" placeholder="Name 5"></li>
+            </ul>
+            <button id="start-game-btn" disabled>Start Game</button>
+        </div>
+    </div>
+
+    <div id="gameplay-ui">
+        <div id="crosshair"></div>
+        <div id="name-notification"></div>
+    </div>
+
+    <div id="end-screen" class="overlay" style="display: none;">
+        <div class="overlay-content">
+            <<h1>Success! <br>
+			You've officially run out of friends <br>(to name, in this game)</h1>
+            <p>Names in order of appearance:</p>
+            <ul id="shot-names-list"></ul>
+            <button id="restart-game-btn">Restart Game</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.158.0/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+
+    <script>
+        // Game State
+        const GameState = { START_SCREEN: 'START_SCREEN', PLAYING: 'PLAYING', GAME_OVER: 'GAME_OVER' };
+        let currentGameState = GameState.START_SCREEN;
+
+        // DOM Elements
+        const startScreen = document.getElementById('start-screen');
+        const endScreen = document.getElementById('end-screen');
+        const nameInputs = [
+            document.getElementById('name1'), document.getElementById('name2'),
+            document.getElementById('name3'), document.getElementById('name4'),
+            document.getElementById('name5'),
+        ];
+        const startGameBtn = document.getElementById('start-game-btn');
+        const restartGameBtn = document.getElementById('restart-game-btn');
+        const shotNamesList = document.getElementById('shot-names-list');
+        const crosshairElement = document.getElementById('crosshair');
+        const nameNotificationElement = document.getElementById('name-notification');
+
+        // Game Variables
+        let namesSet = [];
+        let shotNamesOrder = [];
+        const MAX_NAMES = 5;
+
+        // Three.js Variables
+        let scene, camera, renderer, raycaster;
+        const mouse = new THREE.Vector2();
+        let trees = [];
+        let activeRabbit = null;
+        let animationFrameId = null; 
+
+        // Camera control variables
+        let cameraAngleY = 0;
+        const cameraOrbitRadius = 15;
+        const cameraRotationSpeed = 0.025; // Radians per animation frame
+        const cameraLookAtTarget = new THREE.Vector3(0, 1, 0);
+        let isRotatingLeft = false;
+        let isRotatingRight = false;
+
+        // Cannon.js Variables
+        let world, groundPhysMaterial, rabbitPhysMaterial, treePhysMaterial;
+        
+        // Audio Context
+        let audioCtx;
+        let masterGain;
+        let ambientSoundSource = null;
+
+        const RABBIT_Y_POSITION = 0.35; 
+        const MEADOW_SIZE = 80;
+        const NUM_TREES = 20;
+        const clock = new THREE.Clock(); 
+
+        function init() {
+            setupUIListeners();
+            initAudio(); 
+            checkStartButtonState(); 
+        }
+
+        function initAudio() {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0.3; 
+                masterGain.connect(audioCtx.destination);
+            } catch (e) { console.warn('Web Audio API is not supported.'); audioCtx = null; }
+        }
+        
+        function initThree() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, MEADOW_SIZE * 0.4, MEADOW_SIZE * 0.9);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.x = cameraOrbitRadius * Math.sin(cameraAngleY);
+            camera.position.y = 3; // Fixed height
+            camera.position.z = cameraOrbitRadius * Math.cos(cameraAngleY);
+            camera.lookAt(cameraLookAtTarget);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            raycaster = new THREE.Raycaster();
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 20, 5); directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048; directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.near = 0.5; directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -MEADOW_SIZE/2; directionalLight.shadow.camera.right = MEADOW_SIZE/2;
+            directionalLight.shadow.camera.top = MEADOW_SIZE/2; directionalLight.shadow.camera.bottom = -MEADOW_SIZE/2;
+            scene.add(directionalLight);
+        }
+
+        function initPhysics() {
+            world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0); world.broadphase = new CANNON.NaiveBroadphase();
+            groundPhysMaterial = new CANNON.Material("ground"); rabbitPhysMaterial = new CANNON.Material("rabbit"); treePhysMaterial = new CANNON.Material("tree");
+            world.addContactMaterial(new CANNON.ContactMaterial(groundPhysMaterial, rabbitPhysMaterial, { friction: 0.8, restitution: 0.1 }));
+            world.addContactMaterial(new CANNON.ContactMaterial(treePhysMaterial, rabbitPhysMaterial, { friction: 0.5, restitution: 0.3 }));
+            const groundBody = new CANNON.Body({ mass: 0, material: groundPhysMaterial, shape: new CANNON.Plane() });
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI / 2);
+            world.addBody(groundBody);
+        }
+
+        function setupUIListeners() {
+            nameInputs.forEach(input => input.addEventListener('input', checkStartButtonState));
+            startGameBtn.addEventListener('click', startGame);
+            restartGameBtn.addEventListener('click', restartGame);
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+            document.addEventListener('click', onMouseClick, false);
+            document.addEventListener('keydown', onKeyDown, false);
+            document.addEventListener('keyup', onKeyUp, false);
+        }
+
+        function checkStartButtonState() {
+            const filledNames = nameInputs.map(input => input.value.trim()).filter(name => name !== "");
+            startGameBtn.disabled = !(filledNames.length === MAX_NAMES && new Set(filledNames.map(n => n.toLowerCase())).size === MAX_NAMES);
+        }
+
+        function startGame() {
+            namesSet = nameInputs.map(input => input.value.trim()); shotNamesOrder = [];
+            gsap.to(startScreen, { opacity: 0, duration: 0.5, onComplete: () => {
+                startScreen.style.display = 'none'; currentGameState = GameState.PLAYING;
+                crosshairElement.style.display = 'block'; document.body.style.cursor = 'none';
+                if (!scene) { initThree(); initPhysics(); createProceduralEnvironment(); } 
+                else {
+                    trees.forEach(tree => { scene.remove(tree); if (tree.userData.physicsBody) world.removeBody(tree.userData.physicsBody); });
+                    trees = []; createProceduralEnvironment();
+                }
+                if (ambientSoundSource) ambientSoundSource.stop();
+                ambientSoundSource = playProceduralSound('wind', { volume: 0.02, loop: true });
+                spawnRabbit(); if (!animationFrameId) animate();
+            }});
+        }
+
+        function endGame() {
+            currentGameState = GameState.GAME_OVER; crosshairElement.style.display = 'none'; document.body.style.cursor = 'default'; 
+            if (activeRabbit) {
+                if (activeRabbit.timeline) activeRabbit.timeline.kill();
+                scene.remove(activeRabbit.mesh);
+                if(activeRabbit.mesh.userData.physicsBody && world.bodies.includes(activeRabbit.mesh.userData.physicsBody)) {
+                     world.removeBody(activeRabbit.mesh.userData.physicsBody);
+                }
+                activeRabbit = null;
+            }
+            if (ambientSoundSource) { ambientSoundSource.stop(); ambientSoundSource = null; }
+            playProceduralSound('celebrate', { volume: 0.4 });
+            shotNamesList.innerHTML = ''; shotNamesOrder.forEach(name => shotNamesList.appendChild(Object.assign(document.createElement('li'), { textContent: name })));
+            endScreen.style.opacity = 0; endScreen.style.display = 'flex';
+            gsap.to(endScreen, { opacity: 1, duration: 0.5 });
+        }
+
+        function restartGame() {
+            gsap.to(endScreen, { opacity: 0, duration: 0.5, onComplete: () => {
+                endScreen.style.display = 'none'; namesSet = []; shotNamesOrder = [];
+                nameInputs.forEach(input => input.value = ''); checkStartButtonState();
+                startScreen.style.opacity = 0; startScreen.style.display = 'flex';
+                gsap.to(startScreen, { opacity: 1, duration: 0.5 });
+                currentGameState = GameState.START_SCREEN;
+            }});
+        }
+
+        function onKeyDown(event) {
+            if (currentGameState !== GameState.PLAYING) return;
+            if (event.key === 'a' || event.key === 'A') isRotatingLeft = true;
+            if (event.key === 'd' || event.key === 'D') isRotatingRight = true;
+        }
+
+        function onKeyUp(event) {
+            if (event.key === 'a' || event.key === 'A') isRotatingLeft = false;
+            if (event.key === 'd' || event.key === 'D') isRotatingRight = false;
+        }
+
+        function onWindowResize() {
+            if (camera) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); }
+            if (renderer) renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            if (currentGameState === GameState.PLAYING) {
+                crosshairElement.style.left = event.clientX + 'px';
+                crosshairElement.style.top = event.clientY + 'px';
+            }
+        }
+
+        function onMouseClick() {
+            if (currentGameState !== GameState.PLAYING || !activeRabbit || !activeRabbit.isPeeking) return;
+            playProceduralSound('shoot', { volume: 0.5, filterFrequency: 1200, decay: 0.08 });
+            raycaster.setFromCamera(mouse, camera);
+            if (raycaster.intersectObject(activeRabbit.mesh.userData.hitTarget, true).length > 0) handleRabbitHit();
+        }
+
+        function createProceduralMeadowTexture(size = 256, repeat = 16) {
+            const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            const baseGreen = Math.floor(Math.random() * 20) + 70; 
+            ctx.fillStyle = `rgb(0, ${baseGreen}, 0)`; ctx.fillRect(0, 0, size, size);
+            for (let i = 0; i < 1500; i++) {
+                const x = Math.random() * size; const y = Math.random() * size;
+                const radius = Math.random() * (size/25) + (size/60);
+                const gOff = Math.floor(Math.random() * 30) - 15; const rOff = Math.floor(Math.random() * 15); 
+                ctx.fillStyle = `rgba(${rOff}, ${Math.max(0, Math.min(255, baseGreen + gOff))}, 0, ${Math.random()*0.25 + 0.05})`;
+                ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+            }
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(repeat, repeat);
+            if (renderer) texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            return texture;
+        }
+        
+        function proceduralColor(r, g, b, v = 0.1) { return new THREE.Color(Math.max(0,r+(Math.random()-0.5)*v*2),Math.max(0,g+(Math.random()-0.5)*v*2),Math.max(0,b+(Math.random()-0.5)*v*2)); }
+
+        function createProceduralTree() {
+            const tree = new THREE.Group(); const trunkH = Math.random()*3+4; const trunkR = Math.random()*0.3+0.4;
+            const trunkM = new THREE.Mesh(new THREE.CylinderGeometry(trunkR*0.8, trunkR, trunkH, Math.floor(Math.random()*3)+5), new THREE.MeshStandardMaterial({color:proceduralColor(0.4,0.25,0.15,0.05),roughness:0.8,metalness:0.1}));
+            trunkM.castShadow=true; trunkM.receiveShadow=true; trunkM.position.y=trunkH/2; tree.add(trunkM);
+            const canY=trunkH; const numCP=Math.floor(Math.random()*4)+3; const canC=proceduralColor(0.1,0.4,0.1,0.1);
+            for(let i=0;i<numCP;i++){
+                const pR=Math.random()*1.2+1.0; let pG; const gT=Math.random();
+                if(gT<0.6)pG=new THREE.SphereGeometry(pR,Math.floor(Math.random()*3)+5,Math.floor(Math.random()*2)+4);
+                else if(gT<0.8)pG=new THREE.IcosahedronGeometry(pR,Math.random()>0.5?0:1);
+                else pG=new THREE.DodecahedronGeometry(pR,Math.random()>0.5?0:1);
+                const pM=new THREE.Mesh(pG,new THREE.MeshStandardMaterial({color:canC,roughness:0.7,metalness:0.0}));
+                pM.position.set((Math.random()-0.5)*pR*1.2,canY+(Math.random()-0.3)*pR*0.8,(Math.random()-0.5)*pR*1.2);
+                pM.castShadow=true;pM.receiveShadow=true;tree.add(pM);
+            }
+            const tB=new CANNON.Body({mass:0,material:treePhysMaterial,shape:new CANNON.Cylinder(trunkR,trunkR,trunkH,8)});
+            tree.userData.physicsBody=tB; return tree;
+        }
+
+        function createProceduralEnvironment() {
+            const gM=new THREE.Mesh(new THREE.PlaneGeometry(MEADOW_SIZE,MEADOW_SIZE,32,32),new THREE.MeshStandardMaterial({map:createProceduralMeadowTexture(256,MEADOW_SIZE/6),roughness:0.9,metalness:0.0}));
+            gM.rotation.x=-Math.PI/2; gM.receiveShadow=true; scene.add(gM);
+            for(let i=0;i<NUM_TREES;i++){
+                const tree=createProceduralTree(); let vP=false; let att=0;
+                while(!vP&&att<20){
+                    tree.position.set((Math.random()-0.5)*(MEADOW_SIZE*0.85),0,(Math.random()-0.5)*(MEADOW_SIZE*0.85));
+                    let tC=(Math.abs(tree.position.x)>MEADOW_SIZE/2-5||Math.abs(tree.position.z)>MEADOW_SIZE/2-5);
+                    if(!tC)for(const oT of trees)if(tree.position.distanceTo(oT.position)<6){tC=true;break;}
+                    if(!tC)vP=true;att++;
+                }
+                if(vP){
+                    scene.add(tree);trees.push(tree);
+                    if(tree.userData.physicsBody){
+                        tree.userData.physicsBody.position.copy(tree.position);
+                        tree.userData.physicsBody.position.y+=tree.children[0].geometry.parameters.height/2;
+                        tree.userData.physicsBody.quaternion.copy(tree.quaternion); world.addBody(tree.userData.physicsBody);
+                    }
+                }
+            }
+        }
+
+        function createProceduralRabbit() {
+            const rG=new THREE.Group(); const mat=new THREE.MeshStandardMaterial({color:proceduralColor(0.7,0.65,0.6,0.1),roughness:0.6,metalness:0.1});
+            const bR=Math.random()*0.15+0.25; const bM=new THREE.Mesh(new THREE.SphereGeometry(bR,8,6),mat);bM.castShadow=true;rG.add(bM);
+            const hR=bR*(Math.random()*0.2+0.6); const hM=new THREE.Mesh(new THREE.SphereGeometry(hR,6,5),mat);
+            hM.position.set(0,bR*0.7,bR*0.2);hM.castShadow=true;bM.add(hM);rG.userData.head=hM;
+            const eL=hR*(Math.random()*0.8+1.2); const eR=hR*(Math.random()*0.1+0.15);
+            for(let i=0;i<2;i++){
+                const eGeo=(typeof THREE.CapsuleGeometry!=='undefined')?new THREE.CapsuleGeometry(eR,eL,4,6):new THREE.CylinderGeometry(eR,eR,eL,6);
+                const eM=new THREE.Mesh(eGeo,mat);eM.castShadow=true;
+                eM.position.set((i===0?-1:1)*hR*0.6,hR*0.5+eL*0.4,hR*0.1);
+                eM.rotation.x=-(Math.PI/3)+(Math.random()-0.5)*0.3;eM.rotation.z=(i===0?1:-1)*(Math.PI/10)*(Math.random()*0.5+0.5);hM.add(eM);
+            }
+            const hTS=bR*2.5; const hTM=new THREE.Mesh(new THREE.BoxGeometry(hTS,hTS,hTS),new THREE.MeshBasicMaterial({visible:false}));
+            hTM.position.y=bR*0.5;rG.add(hTM);rG.userData.hitTarget=hTM;
+            const rB=new CANNON.Body({mass:0.5,material:rabbitPhysMaterial,shape:new CANNON.Sphere(bR*1.1),position:new CANNON.Vec3(0,RABBIT_Y_POSITION,0)});
+            rB.allowSleep=true;rB.sleepSpeedLimit=0.2;rB.sleepTimeLimit=1;rG.userData.physicsBody=rB; return rG;
+        }
+
+        function spawnRabbit() {
+            if (activeRabbit || namesSet.length === 0) return;
+            if (trees.length === 0) { console.warn("No trees for rabbit."); return; }
+            const rM=createProceduralRabbit(); rM.position.y=RABBIT_Y_POSITION;
+            const tI=Math.floor(Math.random()*trees.length); const sT=trees[tI];
+            const tR=sT.children[0].geometry.parameters.radiusTop||0.5;
+            const tP=sT.position;
+            const dTC=new THREE.Vector3().subVectors(camera.position,tP); dTC.y=0; dTC.normalize(); // Use current camera position
+            const pD=new THREE.Vector3(-dTC.z,0,dTC.x); const sO=(Math.random()<0.5?1:-1)*(tR+0.6);
+            const hP=new THREE.Vector3(tP.x+pD.x*sO*0.5+dTC.x*0.5,RABBIT_Y_POSITION,tP.z+pD.z*sO*0.5+dTC.z*0.5);
+            const kP=new THREE.Vector3(tP.x+pD.x*sO,RABBIT_Y_POSITION,tP.z+pD.z*sO);
+            rM.position.copy(hP); rM.lookAt(new THREE.Vector3(camera.position.x,RABBIT_Y_POSITION,camera.position.z)); scene.add(rM);
+            activeRabbit={mesh:rM,isPeeking:false,isHit:false,timeline:gsap.timeline()};
+            activeRabbit.timeline.to(rM.position,{x:kP.x,y:kP.y,z:kP.z,duration:Math.random()*0.4+0.3,ease:"power1.out",onStart:()=>playProceduralSound('appear',{v:0.25,f1:600,f2:800,d:0.15})})
+            .set(activeRabbit,{isPeeking:true})
+            .to(rM.userData.head.rotation,{y:(Math.random()-0.5)*0.4,duration:0.25,yoyo:true,repeat:1,ease:"sine.inOut"});
+            const hopH=0.25; const hopD=0.20; const numH=Math.floor(Math.random()*2)+2;
+            for(let i=0;i<numH;i++){
+                activeRabbit.timeline.to(rM.position,{y:RABBIT_Y_POSITION+hopH,duration:hopD*0.8,ease:"power1.out"},i===0?">-=0.1":">+0.05")
+                .to(rM.rotation,{x:-Math.PI/18,duration:hopD*0.7,ease:"power1.out"},"<")
+                .to(rM.position,{y:RABBIT_Y_POSITION,duration:hopD,ease:"bounce.out",onComplete:()=>playProceduralSound('hopThump',{v:0.15,f:60,d:0.06,dec:0.05})})
+                .to(rM.rotation,{x:0,duration:hopD*0.9,ease:"power1.in"},"<+=0.03");
+            }
+            activeRabbit.timeline.to(rM.position,{x:hP.x,y:hP.y,z:hP.z,duration:Math.random()*0.3+0.2,ease:"power1.in",delay:0.3,onStart:()=>activeRabbit.isPeeking=false})
+            .call(()=>{if(activeRabbit&&!activeRabbit.isHit){scene.remove(rM);activeRabbit=null;if(namesSet.length>0)setTimeout(spawnRabbit,Math.random()*1500+1000);else endGame();}});
+        }
+
+        function handleRabbitHit() {
+            if (!activeRabbit || activeRabbit.isHit) return;
+            activeRabbit.isHit = true; activeRabbit.isPeeking = false; if (activeRabbit.timeline) activeRabbit.timeline.kill();
+            playProceduralSound('hit', { volume: 0.4, startFreq: 300, endFreq: 80, duration: 0.4 });
+            const rM=activeRabbit.mesh; const pB=rM.userData.physicsBody;
+            pB.position.copy(rM.position); pB.quaternion.copy(rM.quaternion);
+            if(!world.bodies.includes(pB)) world.addBody(pB); pB.wakeUp();
+            const iS=1.5; const rF=new CANNON.Vec3((Math.random()-0.5)*iS,Math.random()*iS*0.5,(Math.random()-0.5)*iS);
+            const wP=new CANNON.Vec3(); pB.pointToWorldFrame(new CANNON.Vec3(0,rM.children[0].geometry.parameters.radius*0.5,0),wP); pB.applyImpulse(rF,wP);
+            activeRabbit.isFalling=true;
+            if (namesSet.length > 0) {
+                const randomIndex = Math.floor(Math.random() * namesSet.length);
+                const shotName = namesSet.splice(randomIndex, 1)[0]; // Get name and remove it
+                shotNamesOrder.push(shotName);
+                nameNotificationElement.textContent = shotName;
+                gsap.fromTo(nameNotificationElement,{y:"-100%",opacity:0,display:'block'},{y:"0%",opacity:1,duration:0.4,ease:"back.out(1.7)",onComplete:()=>gsap.to(nameNotificationElement,{opacity:0,duration:0.3,delay:1,onComplete:()=>nameNotificationElement.style.display='none'})});
+            }
+            setTimeout(()=>{
+                if(activeRabbit&&activeRabbit.mesh===rM){scene.remove(rM);if(world.bodies.includes(pB))world.removeBody(pB);activeRabbit=null;}
+                if(namesSet.length>0)spawnRabbit();else endGame();
+            },2000);
+        }
+
+        function playProceduralSound(type, p={}){
+            if(!audioCtx)return null; const gN=audioCtx.createGain();gN.gain.value=p.volume!==undefined?p.volume:(p.v||0.5);gN.connect(masterGain);
+            let sN; const dur=p.duration||(p.d||0.2); const now=audioCtx.currentTime;
+            switch(type){
+                case 'shoot':{const nS=audioCtx.createBufferSource();const bS=audioCtx.sampleRate*0.05;const bf=audioCtx.createBuffer(1,bS,audioCtx.sampleRate);const d=bf.getChannelData(0);for(let i=0;i<bS;i++)d[i]=Math.random()*2-1;nS.buffer=bf;const e=audioCtx.createGain();e.gain.setValueAtTime(0,now);e.gain.linearRampToValueAtTime(1,now+0.005);e.gain.exponentialRampToValueAtTime(0.01,now+(p.decay||0.08));const f=audioCtx.createBiquadFilter();f.type='bandpass';f.frequency.value=p.filterFrequency||1200;f.Q.value=p.Q||3;nS.connect(e);e.connect(f);f.connect(gN);nS.start(now);nS.stop(now+(p.decay||0.08)+0.02);break;}
+                case 'hit':{const o=audioCtx.createOscillator();o.type='sine';o.frequency.setValueAtTime(p.startFreq||350,now);o.frequency.exponentialRampToValueAtTime(p.endFreq||80,now+dur);gN.gain.setValueAtTime(0,now);gN.gain.linearRampToValueAtTime(p.volume||0.4,now+0.01);gN.gain.exponentialRampToValueAtTime(0.01,now+dur);o.connect(gN);o.start(now);o.stop(now+dur);break;}
+                case 'appear':{const o=audioCtx.createOscillator();o.type='triangle';gN.gain.setValueAtTime(0,now);gN.gain.linearRampToValueAtTime(p.volume||(p.v||0.25),now+0.01);gN.gain.setValueAtTime(p.volume||(p.v||0.25),now+dur*0.4);gN.gain.exponentialRampToValueAtTime(0.01,now+dur);o.frequency.setValueAtTime(p.freq1||(p.f1||700),now);o.frequency.setValueAtTime(p.freq2||(p.f2||900),now+dur*0.5);o.connect(gN);o.start(now);o.stop(now+dur);break;}
+                case 'celebrate':{const o=audioCtx.createOscillator();o.type='sawtooth';const bF=200;const s=[0,4,7,12,7,4,0];const nD=0.12;gN.gain.setValueAtTime(p.volume||0.3,now);s.forEach((st,idx)=>o.frequency.setValueAtTime(bF*Math.pow(2,st/12),now+idx*nD));o.connect(gN);o.start(now);o.stop(now+s.length*nD);gN.gain.exponentialRampToValueAtTime(0.01,now+s.length*nD+0.2);break;}
+                case 'wind':{const bS=audioCtx.sampleRate*5;const bf=audioCtx.createBuffer(2,bS,audioCtx.sampleRate);for(let ch=0;ch<2;ch++){const d=bf.getChannelData(ch);for(let i=0;i<bS;i++)d[i]=Math.random()*2-1;}sN=audioCtx.createBufferSource();sN.buffer=bf;sN.loop=true;const f=audioCtx.createBiquadFilter();f.type='lowpass';f.frequency.setValueAtTime(80,now);f.Q.value=1;const l=audioCtx.createOscillator();l.type='sine';l.frequency.value=0.1;const lG=audioCtx.createGain();lG.gain.value=30;l.connect(lG);lG.connect(f.frequency);gN.gain.value=p.volume||0.03;sN.connect(f);f.connect(gN);sN.start(now);l.start(now);break;}
+                case 'hopThump':{const o=audioCtx.createOscillator();o.type='sine';const dec=p.decay||(p.dec||0.05);const frq=p.freq||(p.f||60);gN.gain.setValueAtTime(0,now);gN.gain.linearRampToValueAtTime(p.volume||(p.v||0.15),now+0.005);gN.gain.exponentialRampToValueAtTime(0.001,now+dur);o.frequency.setValueAtTime(frq,now);o.frequency.linearRampToValueAtTime(frq*0.8,now+dur*0.7);o.connect(gN);o.start(now);o.stop(now+dur);break;}
+            } return sN;
+        }
+
+        function animate() {
+            animationFrameId = requestAnimationFrame(animate);
+            if (currentGameState === GameState.START_SCREEN && !(activeRabbit && activeRabbit.isFalling)) {
+                cancelAnimationFrame(animationFrameId); animationFrameId = null; return; 
+            }
+
+            const deltaTime = clock.getDelta(); 
+            const fixedTimeStep = 1 / 60; const maxSubSteps = 3;
+
+            if (currentGameState === GameState.PLAYING) {
+                let angleChanged = false;
+                if (isRotatingLeft) { cameraAngleY -= cameraRotationSpeed; angleChanged = true; }
+                if (isRotatingRight) { cameraAngleY += cameraRotationSpeed; angleChanged = true; }
+                if (angleChanged) {
+                    camera.position.x = cameraOrbitRadius * Math.sin(cameraAngleY);
+                    camera.position.z = cameraOrbitRadius * Math.cos(cameraAngleY);
+                    camera.lookAt(cameraLookAtTarget);
+                }
+            }
+
+            if (world && (currentGameState === GameState.PLAYING || (activeRabbit && activeRabbit.isFalling))) {
+                 world.step(fixedTimeStep, deltaTime, maxSubSteps);
+                if (activeRabbit && activeRabbit.isFalling && activeRabbit.mesh.userData.physicsBody) {
+                    activeRabbit.mesh.position.copy(activeRabbit.mesh.userData.physicsBody.position);
+                    activeRabbit.mesh.quaternion.copy(activeRabbit.mesh.userData.physicsBody.quaternion);
+                }
+            }
+            if(renderer && scene && camera) renderer.render(scene, camera);
+        }
+        init();
+    </script>
+</body>
+</html>
